@@ -5,587 +5,407 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#0f0f23">
     <title>阿鑫翻译助手</title>
     <link rel="manifest" href="manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            min-height: 100vh; color: #fff; overflow-x: hidden;
+            background: #0f0f23; min-height: 100vh; color: #fff; overflow: hidden;
         }
-        .container { display: flex; flex-direction: column; height: 100vh; max-width: 100%; padding: 15px; }
+        .container { display: flex; flex-direction: column; height: 100vh; padding: 12px 16px; }
 
         /* 顶部 */
-        .header { text-align: center; padding: 8px 0 12px; }
-        .header h1 { font-size: 1.2rem; color: #00d9ff; text-shadow: 0 0 20px rgba(0,217,255,0.3); }
-        .status-bar { display: flex; justify-content: center; gap: 15px; margin-top: 8px; font-size: 0.8rem; }
-        .status-item { display: flex; align-items: center; gap: 5px; color: #888; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
-        .status-dot.active { background: #00ff88; box-shadow: 0 0 10px #00ff88; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 8px; }
+        .header h1 { font-size: 1rem; color: #7c8fff; }
+        .auto-speak-toggle {
+            display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666;
+        }
+        .auto-speak-toggle input { accent-color: #7c8fff; }
 
-        /* 语言切换栏 */
+        /* 语言切换 */
         .lang-bar {
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            margin-bottom: 12px; padding: 8px 0;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 8px 0; margin-bottom: 6px;
+            background: rgba(255,255,255,0.03); border-radius: 12px;
         }
-        .lang-label { font-size: 0.9rem; color: #aaa; min-width: 60px; text-align: center; }
-        .lang-label.left { color: #00d9ff; }
-        .lang-label.right { color: #ff9f43; }
+        .lang-label { font-size: 0.85rem; color: #aaa; font-weight: 500; }
+        .lang-label.active { color: #7c8fff; }
         .swap-btn {
-            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 1rem;
-            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+            background: rgba(124,143,255,0.15); border: 1px solid rgba(124,143,255,0.3);
+            color: #7c8fff; width: 32px; height: 32px; border-radius: 50%; font-size: 0.9rem;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
         }
-        .swap-btn:active { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
+        .swap-btn:active { transform: rotate(180deg); background: rgba(124,143,255,0.3); }
 
         /* 翻译区域 */
-        .translation-area { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+        .translation-area { flex: 1; display: flex; flex-direction: column; gap: 6px; overflow: hidden; min-height: 0; }
         .panel {
-            flex: 1; background: rgba(255,255,255,0.05); border-radius: 14px; padding: 15px;
+            flex: 1; background: rgba(255,255,255,0.04); border-radius: 14px; padding: 12px 14px;
             display: flex; flex-direction: column; overflow: hidden; position: relative;
         }
-        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .panel-title { font-size: 0.85rem; color: #888; display: flex; align-items: center; gap: 6px; }
-        .panel-title .flag { font-size: 1rem; }
-        .copy-btn {
-            background: rgba(255,255,255,0.1); border: none; color: #888;
-            padding: 5px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; transition: all 0.2s;
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .panel-title { font-size: 0.75rem; color: #555; display: flex; align-items: center; gap: 5px; letter-spacing: 0.5px; }
+        .panel-actions { display: flex; gap: 6px; }
+        .action-btn {
+            background: rgba(255,255,255,0.06); border: none; color: #666;
+            width: 28px; height: 28px; border-radius: 50%; font-size: 0.75rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
         }
-        .copy-btn:active { background: rgba(255,255,255,0.2); color: #fff; }
-        .copy-btn.copied { background: rgba(0,255,136,0.2); color: #00ff88; }
+        .action-btn:active { background: rgba(255,255,255,0.15); color: #fff; }
+        .action-btn.speaking { color: #7c8fff; background: rgba(124,143,255,0.2); animation: pulse2 1s infinite; }
+        @keyframes pulse2 { 0%,100%{opacity:1} 50%{opacity:0.6} }
         .panel-content {
-            flex: 1; font-size: 1.3rem; line-height: 1.5; overflow-y: auto;
+            flex: 1; font-size: 1.2rem; line-height: 1.5; overflow-y: auto;
             word-break: break-word; -webkit-overflow-scrolling: touch;
         }
-        .panel.source .panel-content { color: #fff; }
-        .panel.target .panel-content { color: #00d9ff; }
-        .placeholder { color: #555; font-size: 0.9rem; }
-        .interim { color: #888; font-style: italic; }
-        .loading-dots::after {
-            content: ''; animation: dots 1.5s infinite;
-        }
-        @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+        .panel.source .panel-content { color: #e0e0e0; }
+        .panel.target .panel-content { color: #7c8fff; }
+        .placeholder { color: #333; font-size: 0.85rem; }
+        .interim { color: #666; font-style: italic; }
 
-        /* 历史记录 */
-        .history-toggle {
-            position: absolute; top: 8px; right: 8px;
-            background: rgba(255,255,255,0.1); border: none; color: #888;
-            width: 32px; height: 32px; border-radius: 50%; font-size: 0.85rem; cursor: pointer;
-        }
-        .history-panel {
-            position: fixed; top: 0; right: -100%; width: 80%; max-width: 350px; height: 100vh;
-            background: #1a1a2e; z-index: 1000; transition: right 0.3s ease; padding: 20px; overflow-y: auto;
-        }
-        .history-panel.open { right: 0; }
-        .history-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 999; opacity: 0; visibility: hidden; transition: all 0.3s;
-        }
-        .history-overlay.open { opacity: 1; visibility: visible; }
-        .history-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .history-header h2 { font-size: 1.1rem; color: #00d9ff; }
-        .close-history { background: none; border: none; color: #888; font-size: 1.5rem; cursor: pointer; }
-        .history-item { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-        .history-source { color: #fff; font-size: 0.9rem; margin-bottom: 6px; }
-        .history-target { color: #00d9ff; font-size: 0.9rem; }
-        .history-time { font-size: 0.7rem; color: #555; margin-top: 6px; }
-        .history-empty { text-align: center; color: #555; padding: 30px 0; }
-        .clear-history {
-            background: rgba(255,77,77,0.2); border: none; color: #ff4d4d;
-            padding: 8px 16px; border-radius: 8px; width: 100%; margin-top: 15px; cursor: pointer; font-size: 0.85rem;
-        }
-
-        /* 底部控制区 */
-        .controls { padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-        .mic-button {
-            width: 70px; height: 70px; border-radius: 50%; border: none;
-            background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
-            color: #fff; font-size: 1.8rem; cursor: pointer; transition: all 0.3s;
-            box-shadow: 0 4px 20px rgba(0,217,255,0.4);
-            display: flex; align-items: center; justify-content: center;
-        }
-        .mic-button:active { transform: scale(0.95); }
-        .mic-button.recording {
-            background: linear-gradient(135deg, #ff4d4d 0%, #cc0000 100%);
-            box-shadow: 0 4px 30px rgba(255,77,77,0.6); animation: breathe 1.5s infinite;
-        }
-        @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-        .mic-hint { font-size: 0.8rem; color: #666; text-align: center; }
-        .mic-hint.active { color: #ff4d4d; }
-
-        /* 文字输入 */
-        .text-input-area {
-            display: flex; gap: 8px; padding: 0 0 5px;
-        }
+        /* 底部 */
+        .controls { padding: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .text-input-area { display: flex; gap: 6px; width: 100%; }
         .text-input {
-            flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-            color: #fff; padding: 10px 14px; border-radius: 20px; font-size: 0.9rem; outline: none;
+            flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 10px 14px; border-radius: 22px; font-size: 0.85rem; outline: none;
         }
-        .text-input::placeholder { color: #555; }
+        .text-input::placeholder { color: #444; }
         .send-btn {
-            background: linear-gradient(135deg, #00d9ff, #0099cc); border: none;
-            color: #fff; padding: 10px 16px; border-radius: 20px; font-size: 0.85rem; cursor: pointer;
+            background: #7c8fff; border: none; color: #fff;
+            padding: 10px 18px; border-radius: 22px; font-size: 0.8rem; cursor: pointer; font-weight: 600;
         }
+        .mic-row { display: flex; align-items: center; gap: 16px; }
+        .mic-button {
+            width: 60px; height: 60px; border-radius: 50%; border: none;
+            background: linear-gradient(135deg, #7c8fff 0%, #5a6fff 100%);
+            color: #fff; font-size: 1.6rem; cursor: pointer;
+            box-shadow: 0 2px 16px rgba(124,143,255,0.4);
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .mic-button:active { transform: scale(0.93); }
+        .mic-button.recording {
+            background: linear-gradient(135deg, #ff5757 0%, #ff3333 100%);
+            box-shadow: 0 2px 24px rgba(255,87,87,0.5); animation: breathe 1.5s infinite;
+        }
+        @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+        .mic-hint { font-size: 0.7rem; color: #444; }
 
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%) translateY(20px);
-            background: rgba(0,255,136,0.9); color: #000; padding: 10px 20px; border-radius: 20px;
-            font-size: 0.85rem; opacity: 0; transition: all 0.3s; z-index: 2000;
+        /* 历史 */
+        .history-overlay { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:999;opacity:0;visibility:hidden;transition:all .3s; }
+        .history-overlay.open { opacity:1;visibility:visible; }
+        .history-panel {
+            position:fixed;top:0;right:-100%;width:85%;max-width:360px;height:100vh;
+            background:#0f0f23;z-index:1000;transition:right .3s;padding:20px;overflow-y:auto;
         }
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-        .error-banner {
-            background: rgba(255,77,77,0.2); border: 1px solid rgba(255,77,77,0.4);
-            color: #ff4d4d; padding: 10px; border-radius: 8px; text-align: center;
-            font-size: 0.8rem; margin-bottom: 10px; display: none;
-        }
-        .error-banner.show { display: block; }
+        .history-panel.open { right:0; }
+        .history-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06); }
+        .history-header h2 { font-size:1rem;color:#7c8fff; }
+        .close-history { background:none;border:none;color:#666;font-size:1.5rem;cursor:pointer; }
+        .history-item { background:rgba(255,255,255,0.03);border-radius:10px;padding:10px 12px;margin-bottom:8px; }
+        .history-source { color:#ccc;font-size:0.85rem;margin-bottom:4px; }
+        .history-target { color:#7c8fff;font-size:0.85rem; }
+        .history-meta { font-size:0.65rem;color:#333;margin-top:4px;display:flex;justify-content:space-between;align-items:center; }
+        .history-speak-btn { background:none;border:none;color:#555;font-size:0.75rem;cursor:pointer; }
+        .history-speak-btn:active { color:#7c8fff; }
+        .history-empty { text-align:center;color:#333;padding:30px 0; }
+        .clear-history { background:rgba(255,77,77,0.1);border:none;color:#ff4d4d;padding:8px;border-radius:8px;width:100%;margin-top:12px;cursor:pointer;font-size:0.8rem; }
+
+        .toast { position:fixed;bottom:140px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(124,143,255,0.9);color:#fff;padding:8px 18px;border-radius:18px;font-size:0.8rem;opacity:0;transition:all .3s;z-index:2000; }
+        .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+        .error-banner { background:rgba(255,77,77,0.15);border:1px solid rgba(255,77,77,0.3);color:#ff5757;padding:8px;border-radius:8px;text-align:center;font-size:0.75rem;margin-bottom:8px;display:none; }
+        .error-banner.show { display:block; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="error-banner" id="errorBanner"></div>
-
-        <!-- 顶部 -->
         <div class="header">
-            <h1>🎙️ 阿鑫翻译助手</h1>
-            <div class="status-bar">
-                <div class="status-item"><div class="status-dot" id="micStatus"></div><span>麦克风</span></div>
-                <div class="status-item"><div class="status-dot" id="netStatus"></div><span>网络</span></div>
-            </div>
+            <h1>🎙️ 翻译助手</h1>
+            <label class="auto-speak-toggle">
+                <input type="checkbox" id="autoSpeak" checked> 自动朗读
+            </label>
         </div>
-
-        <!-- 语言切换栏 -->
         <div class="lang-bar">
-            <span class="lang-label left" id="srcLabel">🇨🇳 中文</span>
-            <button class="swap-btn" id="swapBtn" title="切换语言">⇄</button>
-            <span class="lang-label right" id="tgtLabel">🇺🇸 English</span>
+            <span class="lang-label active" id="srcLabel">🇨🇳 中文</span>
+            <button class="swap-btn" id="swapBtn">⇄</button>
+            <span class="lang-label" id="tgtLabel">🇺🇸 English</span>
         </div>
-
-        <!-- 翻译区域 -->
         <div class="translation-area">
             <div class="panel source">
                 <div class="panel-header">
                     <div class="panel-title"><span id="srcFlag">🇨🇳</span><span id="srcLangName">中文</span></div>
-                    <button class="copy-btn" id="copySource">复制</button>
+                    <div class="panel-actions">
+                        <button class="action-btn" id="speakSource" title="朗读原文">🔊</button>
+                        <button class="action-btn" id="copySource" title="复制">📋</button>
+                    </div>
                 </div>
-                <div class="panel-content" id="sourceText">
-                    <span class="placeholder">点击麦克风或输入文字开始翻译...</span>
-                </div>
+                <div class="panel-content" id="sourceText"><span class="placeholder">点击麦克风或输入文字...</span></div>
             </div>
             <div class="panel target">
-                <button class="history-toggle" id="historyToggle" title="历史">📜</button>
                 <div class="panel-header">
                     <div class="panel-title"><span id="tgtFlag">🇺🇸</span><span id="tgtLangName">English</span></div>
-                    <button class="copy-btn" id="copyTarget">复制</button>
+                    <div class="panel-actions">
+                        <button class="action-btn" id="speakTarget" title="朗读译文">🔊</button>
+                        <button class="action-btn" id="copyTarget" title="复制">📋</button>
+                        <button class="action-btn" id="historyToggle" title="历史">📜</button>
+                    </div>
                 </div>
-                <div class="panel-content" id="targetText">
-                    <span class="placeholder">翻译结果将显示在这里</span>
-                </div>
+                <div class="panel-content" id="targetText"><span class="placeholder">翻译结果</span></div>
             </div>
         </div>
-
-        <!-- 文字输入 -->
-        <div class="text-input-area">
-            <input class="text-input" id="textInput" placeholder="输入文字翻译..." />
-            <button class="send-btn" id="sendBtn">翻译</button>
-        </div>
-
-        <!-- 控制区 -->
         <div class="controls">
-            <button class="mic-button" id="micButton">🎤</button>
+            <div class="text-input-area">
+                <input class="text-input" id="textInput" placeholder="输入文字翻译..." />
+                <button class="send-btn" id="sendBtn">翻译</button>
+            </div>
+            <div class="mic-row">
+                <button class="mic-button" id="micButton">🎤</button>
+            </div>
             <div class="mic-hint" id="micHint">点击开始语音翻译</div>
         </div>
     </div>
 
-    <!-- 历史记录 -->
     <div class="history-overlay" id="historyOverlay"></div>
     <div class="history-panel" id="historyPanel">
-        <div class="history-header">
-            <h2>📜 翻译历史</h2>
-            <button class="close-history" id="closeHistory">×</button>
-        </div>
+        <div class="history-header"><h2>📜 翻译历史</h2><button class="close-history" id="closeHistory">×</button></div>
         <div id="historyList"></div>
         <button class="clear-history" id="clearHistory">清空历史</button>
     </div>
-
     <div class="toast" id="toast"></div>
 
     <script>
-        // ==================== 语言配置 ====================
-        const LANG_CONFIG = {
-            'zh2en': {
-                srcLang: 'zh-CN', tgtLang: 'en',
-                srcFlag: '🇨🇳', tgtFlag: '🇺🇸',
-                srcName: '中文', tgtName: 'English',
-                srcLabel: '🇨🇳 中文', tgtLabel: '🇺🇸 English',
-                langpair: 'zh-CN|en'
-            },
-            'en2zh': {
-                srcLang: 'en-US', tgtLang: 'zh-CN',
-                srcFlag: '🇺🇸', tgtFlag: '🇨🇳',
-                srcName: 'English', tgtName: '中文',
-                srcLabel: '🇺🇸 English', tgtLabel: '🇨🇳 中文',
-                langpair: 'en|zh-CN'
-            }
+        const LANG = {
+            zh2en: { src:'zh-CN', tgt:'en-US', srcCode:'zh', tgtCode:'en', srcF:'🇨🇳', tgtF:'🇺🇸', srcN:'中文', tgtN:'English', lp:'zh-CN|en' },
+            en2zh: { src:'en-US', tgt:'zh-CN', srcCode:'en', tgtCode:'zh', srcF:'🇺🇸', tgtF:'🇨🇳', srcN:'English', tgtN:'中文', lp:'en|zh-CN' }
         };
 
-        // ==================== 状态 ====================
-        let state = {
-            isRecording: false,
-            isTranslating: false,
-            mode: 'zh2en',  // 默认中文转英文
-            recognition: null,
-            currentSource: '',
-            currentTarget: '',
-            translationQueue: [],
-            isProcessingQueue: false,
-            history: JSON.parse(localStorage.getItem('translationHistory2') || '[]')
+        let S = {
+            mode: 'zh2en', recording: false, recognition: null,
+            sourceText: '', targetText: '',
+            lastInterim: '', interimTimer: null, ttsQueue: [], isSpeaking: false,
+            history: JSON.parse(localStorage.getItem('transHist3') || '[]')
         };
 
-        function getConfig() { return LANG_CONFIG[state.mode]; }
-
-        // ==================== DOM ====================
+        const cfg = () => LANG[S.mode];
+        const $ = id => document.getElementById(id);
         const el = {
-            micButton: document.getElementById('micButton'),
-            micHint: document.getElementById('micHint'),
-            micStatus: document.getElementById('micStatus'),
-            netStatus: document.getElementById('netStatus'),
-            sourceText: document.getElementById('sourceText'),
-            targetText: document.getElementById('targetText'),
-            copySource: document.getElementById('copySource'),
-            copyTarget: document.getElementById('copyTarget'),
-            errorBanner: document.getElementById('errorBanner'),
-            toast: document.getElementById('toast'),
-            swapBtn: document.getElementById('swapBtn'),
-            srcLabel: document.getElementById('srcLabel'),
-            tgtLabel: document.getElementById('tgtLabel'),
-            srcFlag: document.getElementById('srcFlag'),
-            tgtFlag: document.getElementById('tgtFlag'),
-            srcLangName: document.getElementById('srcLangName'),
-            tgtLangName: document.getElementById('tgtLangName'),
-            textInput: document.getElementById('textInput'),
-            sendBtn: document.getElementById('sendBtn'),
-            historyToggle: document.getElementById('historyToggle'),
-            historyPanel: document.getElementById('historyPanel'),
-            historyOverlay: document.getElementById('historyOverlay'),
-            closeHistory: document.getElementById('closeHistory'),
-            historyList: document.getElementById('historyList'),
-            clearHistory: document.getElementById('clearHistory')
+            micBtn:$('micButton'), micHint:$('micHint'), micStatus:$('micStatus'),
+            srcText:$('sourceText'), tgtText:$('targetText'),
+            speakSrc:$('speakSource'), speakTgt:$('speakTarget'),
+            copySrc:$('copySource'), copyTgt:$('copyTarget'),
+            srcFlag:$('srcFlag'), tgtFlag:$('tgtFlag'), srcName:$('srcLangName'), tgtName:$('tgtLangName'),
+            srcLabel:$('srcLabel'), tgtLabel:$('tgtLabel'),
+            swapBtn:$('swapBtn'), textInput:$('textInput'), sendBtn:$('sendBtn'),
+            autoSpeak:$('autoSpeak'), histToggle:$('historyToggle'),
+            histPanel:$('historyPanel'), histOverlay:$('historyOverlay'),
+            closeHist:$('closeHistory'), histList:$('historyList'), clearHist:$('clearHistory'),
+            error:$('errorBanner'), toast:$('toast')
         };
 
-        // ==================== 初始化 ====================
         function init() {
-            initSpeechRecognition();
-            initEventListeners();
-            updateLangUI();
-            checkNetworkStatus();
-            renderHistory();
-            setInterval(checkNetworkStatus, 10000);
+            initSR();
+            el.micBtn.onclick = toggleRec;
+            el.swapBtn.onclick = swapLang;
+            el.sendBtn.onclick = sendText;
+            el.textInput.onkeydown = e => { if(e.key==='Enter') sendText(); };
+            el.speakSrc.onclick = () => speak(S.sourceText, cfg().srcCode);
+            el.speakTgt.onclick = () => speak(S.targetText, cfg().tgtCode);
+            el.copySrc.onclick = () => copy(S.sourceText);
+            el.copyTgt.onclick = () => copy(S.targetText);
+            el.histToggle.onclick = () => { el.histPanel.classList.toggle('open'); el.histOverlay.classList.toggle('open'); };
+            el.histOverlay.onclick = el.closeHist.onclick = () => { el.histPanel.classList.remove('open'); el.histOverlay.classList.remove('open'); };
+            el.clearHist.onclick = () => { if(confirm('清空？')){ S.history=[]; localStorage.removeItem('transHist3'); renderHist(); } };
+            updateLangUI(); renderHist();
         }
 
         function updateLangUI() {
-            const cfg = getConfig();
-            el.srcLabel.textContent = cfg.srcLabel;
-            el.tgtLabel.textContent = cfg.tgtLabel;
-            el.srcFlag.textContent = cfg.srcFlag;
-            el.tgtFlag.textContent = cfg.tgtFlag;
-            el.srcLangName.textContent = cfg.srcName;
-            el.tgtLangName.textContent = cfg.tgtName;
-            el.textInput.placeholder = `输入${cfg.srcName}翻译...`;
-            el.micHint.textContent = `点击开始${cfg.srcName}语音翻译`;
+            const c = cfg();
+            el.srcFlag.textContent = c.srcF; el.tgtFlag.textContent = c.tgtF;
+            el.srcName.textContent = c.srcN; el.tgtName.textContent = c.tgtN;
+            el.srcLabel.textContent = c.srcF+' '+c.srcN; el.tgtLabel.textContent = c.tgtF+' '+c.tgtN;
+            el.textInput.placeholder = `输入${c.srcN}翻译...`;
+            el.micHint.textContent = `点击开始${c.srcN}语音翻译`;
         }
 
-        // ==================== 语音识别 ====================
-        function initSpeechRecognition() {
+        // ===== 语音识别 =====
+        function initSR() {
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SR) {
-                showError('浏览器不支持语音识别，请用Chrome');
-                el.micButton.disabled = true;
-                return;
-            }
-            state.recognition = new SR();
-            state.recognition.continuous = true;
-            state.recognition.interimResults = true;
+            if (!SR) { el.micBtn.disabled = true; showErr('请用Chrome浏览器'); return; }
+            S.recognition = new SR();
+            S.recognition.continuous = true;
+            S.recognition.interimResults = true;
 
-            state.recognition.onresult = function(e) {
+            S.recognition.onresult = e => {
                 let interim = '', final = '';
                 for (let i = e.resultIndex; i < e.results.length; i++) {
                     const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) final += t;
-                    else interim += t;
+                    e.results[i].isFinal ? final += t : interim += t;
                 }
                 if (final) {
-                    // 最终结果：固定原文，翻译并固定译文
-                    state.currentSource += final + ' ';
+                    S.sourceText += final + ' ';
                     realtimeTranslate(final.trim(), true);
                 } else if (interim) {
-                    // 中间结果：实时显示原文+实时翻译
                     realtimeTranslate(interim.trim(), false);
                 }
             };
-
-            state.recognition.onend = function() {
-                if (state.isRecording) {
-                    try { state.recognition.start(); } catch(e) {}
-                }
-            };
-
-            state.recognition.onerror = function(e) {
-                if (e.error === 'not-allowed') showError('请允许麦克风权限');
-                else if (e.error === 'network') showError('网络错误');
-                if (e.error !== 'aborted' && e.error !== 'no-speech') stopRecording();
+            S.recognition.onend = () => { if (S.recording) try { S.recognition.start(); } catch(e){} };
+            S.recognition.onerror = e => {
+                if (e.error==='not-allowed') showErr('请允许麦克风权限');
+                if (e.error!=='aborted' && e.error!=='no-speech') stopRec();
             };
         }
 
-        function setRecognitionLang() {
-            if (state.recognition) {
-                state.recognition.lang = getConfig().srcLang;
-            }
-        }
-
-        // ==================== 事件 ====================
-        function initEventListeners() {
-            el.micButton.addEventListener('click', toggleRecording);
-            el.swapBtn.addEventListener('click', swapLanguage);
-            el.copySource.addEventListener('click', () => copyToClipboard(state.currentSource, '原文'));
-            el.copyTarget.addEventListener('click', () => copyToClipboard(state.currentTarget, '译文'));
-            el.sendBtn.addEventListener('click', translateInput);
-            el.textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') translateInput(); });
-            el.historyToggle.addEventListener('click', () => { el.historyPanel.classList.toggle('open'); el.historyOverlay.classList.toggle('open'); });
-            el.historyOverlay.addEventListener('click', closeHistoryPanel);
-            el.closeHistory.addEventListener('click', closeHistoryPanel);
-            el.clearHistory.addEventListener('click', clearHistory);
-        }
-
-        function swapLanguage() {
-            state.mode = state.mode === 'zh2en' ? 'en2zh' : 'zh2en';
-            updateLangUI();
-            setRecognitionLang();
-            // 交换当前内容
-            const tmp = state.currentSource;
-            state.currentSource = state.currentTarget;
-            state.currentTarget = tmp;
-            updateSourceDisplay('');
-            updateTargetDisplay();
-            showToast(`已切换: ${getConfig().srcName} → ${getConfig().tgtName}`);
-        }
-
-        function translateInput() {
-            const text = el.textInput.value.trim();
-            if (!text) return;
-            state.currentSource += text + ' ';
-            realtimeTranslate(text, true);
-            el.textInput.value = '';
-        }
-
-        // ==================== 录音 ====================
-        function toggleRecording() {
-            state.isRecording ? stopRecording() : startRecording();
-        }
-
-        function startRecording() {
-            if (!state.recognition) { showError('语音识别不可用'); return; }
-            setRecognitionLang();
+        function toggleRec() { S.recording ? stopRec() : startRec(); }
+        function startRec() {
+            if (!S.recognition) return;
+            S.recognition.lang = cfg().src;
             try {
-                state.recognition.start();
-                state.isRecording = true;
-                el.micButton.classList.add('recording');
-                el.micButton.textContent = '⏹️';
-                el.micHint.textContent = '正在录音... 点击停止';
-                el.micHint.classList.add('active');
-                el.micStatus.classList.add('active');
-                state.currentSource = '';
-                state.currentTarget = '';
-            } catch(e) {
-                showError('启动失败，请刷新重试');
-            }
+                S.recognition.start(); S.recording = true;
+                el.micBtn.classList.add('recording'); el.micBtn.textContent = '⏹️';
+                el.micHint.textContent = '正在听... 点击停止';
+                S.sourceText = ''; S.targetText = '';
+                el.srcText.innerHTML = '<span class="placeholder">正在听...</span>';
+                el.tgtText.innerHTML = '<span class="placeholder">翻译中...</span>';
+            } catch(e) { showErr('启动失败'); }
+        }
+        function stopRec() {
+            if (S.recognition) S.recognition.stop();
+            S.recording = false;
+            el.micBtn.classList.remove('recording'); el.micBtn.textContent = '🎤';
+            el.micHint.textContent = `点击开始${cfg().srcN}语音翻译`;
         }
 
-        function stopRecording() {
-            if (state.recognition) state.recognition.stop();
-            state.isRecording = false;
-            el.micButton.classList.remove('recording');
-            el.micButton.textContent = '🎤';
-            el.micHint.textContent = `点击开始${getConfig().srcName}语音翻译`;
-            el.micHint.classList.remove('active');
-            el.micStatus.classList.remove('active');
-        }
-
-        // ==================== 实时翻译 ====================
-        let lastInterimText = '';
-        let interimTranslateTimer = null;
-
+        // ===== 实时翻译 =====
         function realtimeTranslate(text, isFinal) {
             if (!text) return;
-
             if (isFinal) {
-                // 最终结果：清掉临时的，固定翻译
-                clearTimeout(interimTranslateTimer);
+                clearTimeout(S.interimTimer);
                 doTranslate(text, true);
             } else {
-                // 中间结果：节流，每300ms翻译一次，避免太频繁
-                if (text === lastInterimText) return;
-                lastInterimText = text;
-                clearTimeout(interimTranslateTimer);
-                interimTranslateTimer = setTimeout(() => {
-                    doTranslate(text, false);
-                }, 300);
+                if (text === S.lastInterim) return;
+                S.lastInterim = text;
+                clearTimeout(S.interimTimer);
+                S.interimTimer = setTimeout(() => doTranslate(text, false), 250);
             }
         }
 
         async function doTranslate(text, isFinal) {
-            const cfg = getConfig();
-
+            const c = cfg();
             if (isFinal) {
-                // 固定原文显示
-                updateSourceDisplay('');
-                // 翻译
+                el.srcText.innerHTML = esc(S.sourceText);
                 try {
-                    const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
-                    state.currentTarget += translated + ' ';
-                    updateTargetDisplay();
-                    saveToHistory(text, translated);
+                    const r = await gTrans(text, c.srcCode, c.tgtCode);
+                    S.targetText += r + ' ';
+                    el.tgtText.innerHTML = esc(S.targetText);
+                    saveHist(text, r);
+                    if (el.autoSpeak.checked) speak(r, c.tgtCode);
                 } catch(e) {
                     try {
-                        const translated = await myMemoryTranslate(text, cfg.langpair);
-                        state.currentTarget += translated + ' ';
-                        updateTargetDisplay();
-                        saveToHistory(text, translated);
-                    } catch(e2) {
-                        console.error('翻译失败:', e2);
-                    }
+                        const r = await mmTrans(text, c.lp);
+                        S.targetText += r + ' ';
+                        el.tgtText.innerHTML = esc(S.targetText);
+                        saveHist(text, r);
+                        if (el.autoSpeak.checked) speak(r, c.tgtCode);
+                    } catch(e2) { console.error(e2); }
                 }
             } else {
-                // 中间结果：原文实时显示（包含已固定+当前临时）
-                let sourceHtml = '';
-                if (state.currentSource) sourceHtml += `<span>${esc(state.currentSource)}</span>`;
-                sourceHtml += `<span class="interim">${esc(text)}</span>`;
-                el.sourceText.innerHTML = sourceHtml;
-
-                // 译文也实时显示（已固定+临时翻译）
+                el.srcText.innerHTML = esc(S.sourceText) + `<span class="interim">${esc(text)}</span>`;
                 try {
-                    const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
-                    let targetHtml = '';
-                    if (state.currentTarget) targetHtml += `<span>${esc(state.currentTarget)}</span>`;
-                    targetHtml += `<span class="interim">${esc(translated)}</span>`;
-                    el.targetText.innerHTML = targetHtml;
-                } catch(e) {
-                    // 翻译失败不显示
-                }
+                    const r = await gTrans(text, c.srcCode, c.tgtCode);
+                    el.tgtText.innerHTML = esc(S.targetText) + `<span class="interim">${esc(r)}</span>`;
+                } catch(e) {}
             }
         }
 
-        // 首选：Google翻译（最快，国内可访问translate.googleapis.com）
-        async function googleTranslate(text, source, target) {
-            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-            const resp = await fetch(url);
-            const data = await resp.json();
-            // Google返回格式: [[["翻译文本","原文",...],...],...]
-            if (data && data[0]) {
-                let result = '';
-                for (const part of data[0]) {
-                    if (part[0]) result += part[0];
-                }
-                if (result) return result;
-            }
-            throw new Error('Google translate failed');
+        // ===== 翻译API =====
+        async function gTrans(text, sl, tl) {
+            const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`);
+            const d = await r.json();
+            if (d && d[0]) { let s=''; for(const p of d[0]) if(p[0]) s+=p[0]; if(s) return s; }
+            throw new Error('gTrans fail');
+        }
+        async function mmTrans(text, lp) {
+            const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${lp}`);
+            const d = await r.json();
+            if (d.responseStatus===200 && d.responseData) return d.responseData.translatedText;
+            throw new Error('mmTrans fail');
         }
 
-        // 备选：MyMemory
-        async function myMemoryTranslate(text, langpair) {
-            const resp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`);
-            const data = await resp.json();
-            if (data.responseStatus === 200 && data.responseData) {
-                return data.responseData.translatedText;
-            }
-            throw new Error('MyMemory failed');
+        // ===== TTS语音合成 =====
+        function speak(text, lang) {
+            if (!text || !text.trim()) return;
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text.trim());
+            u.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+            u.rate = 1.0;
+            u.pitch = 1.0;
+            // 尝试选一个好的声音
+            const voices = speechSynthesis.getVoices();
+            const match = voices.find(v => v.lang.startsWith(u.lang));
+            if (match) u.voice = match;
+            // 朗读时高亮按钮
+            const btn = lang === cfg().tgtCode.replace('-CN','').replace('-US','') ? el.speakTgt : el.speakSrc;
+            btn.classList.add('speaking');
+            u.onend = () => btn.classList.remove('speaking');
+            u.onerror = () => btn.classList.remove('speaking');
+            speechSynthesis.speak(u);
         }
 
-        // ==================== UI更新 ====================
-        function updateSourceDisplay(interim) {
-            let html = '';
-            if (state.currentSource) html += `<span>${esc(state.currentSource)}</span>`;
-            if (interim) html += `<span class="interim">${esc(interim)}</span>`;
-            if (!html) html = '<span class="placeholder">点击麦克风或输入文字开始翻译...</span>';
-            el.sourceText.innerHTML = html;
+        // 预加载声音列表
+        speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+
+        // ===== 交互 =====
+        function swapLang() {
+            S.mode = S.mode === 'zh2en' ? 'en2zh' : 'zh2en';
+            updateLangUI();
+            const tmp = S.sourceText; S.sourceText = S.targetText; S.targetText = tmp;
+            el.srcText.innerHTML = S.sourceText ? esc(S.sourceText) : '<span class="placeholder">点击麦克风或输入文字...</span>';
+            el.tgtText.innerHTML = S.targetText ? esc(S.targetText) : '<span class="placeholder">翻译结果</span>';
+            showToast(`${cfg().srcN} → ${cfg().tgtN}`);
         }
 
-        function updateTargetDisplay() {
-            let html = '';
-            if (state.currentTarget) {
-                html = `<span>${esc(state.currentTarget)}</span>`;
-            } else {
-                html = '<span class="placeholder">翻译结果将显示在这里</span>';
-            }
-            el.targetText.innerHTML = html;
+        function sendText() {
+            const t = el.textInput.value.trim();
+            if (!t) return;
+            S.sourceText += t + ' ';
+            realtimeTranslate(t, true);
+            el.textInput.value = '';
         }
 
-        // ==================== 历史 ====================
-        function saveToHistory(source, target) {
-            const cfg = getConfig();
-            state.history.unshift({
-                id: Date.now(), source, target,
-                mode: cfg.srcName + '→' + cfg.tgtName,
-                time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-            });
-            if (state.history.length > 50) state.history = state.history.slice(0, 50);
-            localStorage.setItem('translationHistory2', JSON.stringify(state.history));
-            renderHistory();
+        function copy(text) {
+            if (!text.trim()) return;
+            navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => showToast('复制失败'));
         }
 
-        function renderHistory() {
-            if (!state.history.length) { el.historyList.innerHTML = '<div class="history-empty">暂无记录</div>'; return; }
-            el.historyList.innerHTML = state.history.map(i => `
+        // ===== 历史 =====
+        function saveHist(src, tgt) {
+            const c = cfg();
+            S.history.unshift({ src, tgt, mode: c.srcN+'→'+c.tgtN, time: new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}), tgtLang: c.tgtCode });
+            if (S.history.length > 80) S.history = S.history.slice(0, 80);
+            localStorage.setItem('transHist3', JSON.stringify(S.history));
+            renderHist();
+        }
+        function renderHist() {
+            if (!S.history.length) { el.histList.innerHTML = '<div class="history-empty">暂无记录</div>'; return; }
+            el.histList.innerHTML = S.history.map(i => `
                 <div class="history-item">
-                    <div class="history-source">${esc(i.source)}</div>
-                    <div class="history-target">${esc(i.target)}</div>
-                    <div class="history-time">${i.mode} · ${i.time}</div>
+                    <div class="history-source">${esc(i.src)}</div>
+                    <div class="history-target">${esc(i.tgt)}</div>
+                    <div class="history-meta">
+                        <span>${i.mode} · ${i.time}</span>
+                        <button class="history-speak-btn" onclick="speak('${esc(i.tgt).replace(/'/g,"\\'")}','${i.tgtLang}')">🔊 朗读</button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        function closeHistoryPanel() { el.historyPanel.classList.remove('open'); el.historyOverlay.classList.remove('open'); }
-        function clearHistory() {
-            if (confirm('清空所有历史记录？')) {
-                state.history = []; localStorage.removeItem('translationHistory2');
-                renderHistory(); showToast('已清空');
-            }
-        }
-
-        // ==================== 工具 ====================
-        function copyToClipboard(text, label) {
-            if (!text.trim()) { showToast('没有内容'); return; }
-            navigator.clipboard.writeText(text).then(() => {
-                showToast(`${label}已复制`);
-            }).catch(() => showToast('复制失败'));
-        }
-
-        function showError(msg) {
-            el.errorBanner.textContent = msg;
-            el.errorBanner.classList.add('show');
-            setTimeout(() => el.errorBanner.classList.remove('show'), 4000);
-        }
-
-        function showToast(msg) {
-            el.toast.textContent = msg;
-            el.toast.classList.add('show');
-            setTimeout(() => el.toast.classList.remove('show'), 2000);
-        }
-
-        function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-
-        function checkNetworkStatus() {
-            fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-store' })
-                .then(() => el.netStatus.classList.add('active'))
-                .catch(() => el.netStatus.classList.remove('active'));
-        }
+        // ===== 工具 =====
+        function showErr(m) { el.error.textContent=m; el.error.classList.add('show'); setTimeout(()=>el.error.classList.remove('show'),4000); }
+        function showToast(m) { el.toast.textContent=m; el.toast.classList.add('show'); setTimeout(()=>el.toast.classList.remove('show'),1500); }
+        function esc(t) { const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 
         document.addEventListener('DOMContentLoaded', init);
     </script>
