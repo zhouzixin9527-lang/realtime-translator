@@ -322,10 +322,13 @@
                     else interim += t;
                 }
                 if (final) {
+                    // 最终结果：固定原文，翻译并固定译文
                     state.currentSource += final + ' ';
-                    queueTranslation(final.trim());
+                    realtimeTranslate(final.trim(), true);
+                } else if (interim) {
+                    // 中间结果：实时显示原文+实时翻译
+                    realtimeTranslate(interim.trim(), false);
                 }
-                updateSourceDisplay(interim);
             };
 
             state.recognition.onend = function() {
@@ -378,9 +381,8 @@
             const text = el.textInput.value.trim();
             if (!text) return;
             state.currentSource += text + ' ';
-            queueTranslation(text);
+            realtimeTranslate(text, true);
             el.textInput.value = '';
-            updateSourceDisplay('');
         }
 
         // ==================== 录音 ====================
@@ -416,36 +418,66 @@
             el.micStatus.classList.remove('active');
         }
 
-        // ==================== 翻译（极速版） ====================
-        function queueTranslation(text) {
-            // 直接翻译，不排队
-            doTranslate(text);
+        // ==================== 实时翻译 ====================
+        let lastInterimText = '';
+        let interimTranslateTimer = null;
+
+        function realtimeTranslate(text, isFinal) {
+            if (!text) return;
+
+            if (isFinal) {
+                // 最终结果：清掉临时的，固定翻译
+                clearTimeout(interimTranslateTimer);
+                doTranslate(text, true);
+            } else {
+                // 中间结果：节流，每300ms翻译一次，避免太频繁
+                if (text === lastInterimText) return;
+                lastInterimText = text;
+                clearTimeout(interimTranslateTimer);
+                interimTranslateTimer = setTimeout(() => {
+                    doTranslate(text, false);
+                }, 300);
+            }
         }
 
-        async function doTranslate(text) {
+        async function doTranslate(text, isFinal) {
             const cfg = getConfig();
-            // 显示翻译中状态
-            const prevTarget = state.currentTarget;
-            state.currentTarget += '⏳ ';
-            updateTargetDisplay();
 
-            try {
-                const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
-                state.currentTarget = prevTarget + translated + ' ';
-                updateTargetDisplay();
-                saveToHistory(text, translated);
-            } catch(e) {
-                console.error('Google翻译失败，尝试备选:', e);
+            if (isFinal) {
+                // 固定原文显示
+                updateSourceDisplay('');
+                // 翻译
                 try {
-                    const translated = await myMemoryTranslate(text, cfg.langpair);
-                    state.currentTarget = prevTarget + translated + ' ';
+                    const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
+                    state.currentTarget += translated + ' ';
                     updateTargetDisplay();
                     saveToHistory(text, translated);
-                } catch(e2) {
-                    // 移除⏳
-                    state.currentTarget = prevTarget;
-                    updateTargetDisplay();
-                    console.error('翻译全部失败:', e2);
+                } catch(e) {
+                    try {
+                        const translated = await myMemoryTranslate(text, cfg.langpair);
+                        state.currentTarget += translated + ' ';
+                        updateTargetDisplay();
+                        saveToHistory(text, translated);
+                    } catch(e2) {
+                        console.error('翻译失败:', e2);
+                    }
+                }
+            } else {
+                // 中间结果：原文实时显示（包含已固定+当前临时）
+                let sourceHtml = '';
+                if (state.currentSource) sourceHtml += `<span>${esc(state.currentSource)}</span>`;
+                sourceHtml += `<span class="interim">${esc(text)}</span>`;
+                el.sourceText.innerHTML = sourceHtml;
+
+                // 译文也实时显示（已固定+临时翻译）
+                try {
+                    const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
+                    let targetHtml = '';
+                    if (state.currentTarget) targetHtml += `<span>${esc(state.currentTarget)}</span>`;
+                    targetHtml += `<span class="interim">${esc(translated)}</span>`;
+                    el.targetText.innerHTML = targetHtml;
+                } catch(e) {
+                    // 翻译失败不显示
                 }
             }
         }
