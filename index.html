@@ -416,78 +416,64 @@
             el.micStatus.classList.remove('active');
         }
 
-        // ==================== 翻译（多API并行，取最快） ====================
+        // ==================== 翻译（极速版） ====================
         function queueTranslation(text) {
-            state.translationQueue.push(text);
-            processQueue();
+            // 直接翻译，不排队
+            doTranslate(text);
         }
 
-        async function processQueue() {
-            if (state.isProcessingQueue || state.translationQueue.length === 0) return;
-            state.isProcessingQueue = true;
+        async function doTranslate(text) {
+            const cfg = getConfig();
+            // 显示翻译中状态
+            const prevTarget = state.currentTarget;
+            state.currentTarget += '⏳ ';
+            updateTargetDisplay();
 
-            while (state.translationQueue.length > 0) {
-                const text = state.translationQueue.shift();
+            try {
+                const translated = await googleTranslate(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]);
+                state.currentTarget = prevTarget + translated + ' ';
+                updateTargetDisplay();
+                saveToHistory(text, translated);
+            } catch(e) {
+                console.error('Google翻译失败，尝试备选:', e);
                 try {
-                    const translated = await fastTranslate(text);
-                    if (translated) {
-                        state.currentTarget += translated + ' ';
-                        updateTargetDisplay();
-                        saveToHistory(text, translated);
-                    }
-                } catch(e) {
-                    console.error('翻译失败:', e);
+                    const translated = await myMemoryTranslate(text, cfg.langpair);
+                    state.currentTarget = prevTarget + translated + ' ';
+                    updateTargetDisplay();
+                    saveToHistory(text, translated);
+                } catch(e2) {
+                    // 移除⏳
+                    state.currentTarget = prevTarget;
+                    updateTargetDisplay();
+                    console.error('翻译全部失败:', e2);
                 }
             }
-            state.isProcessingQueue = false;
         }
 
-        async function fastTranslate(text) {
-            const cfg = getConfig();
-            // 并行请求多个API，谁先返回用谁
-            const promises = [
-                translateMyMemory(text, cfg.langpair),
-                translateLibre(text, cfg.srcLang.split('-')[0], cfg.tgtLang.split('-')[0]),
-            ];
-
-            return new Promise((resolve) => {
-                let resolved = false;
-                const timeout = setTimeout(() => {
-                    if (!resolved) { resolved = true; resolve(text); } // 超时返回原文
-                }, 5000);
-
-                promises.forEach(p => {
-                    p.then(result => {
-                        if (!resolved && result && !result.toUpperCase().includes('MYMEMORY')) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            resolve(result);
-                        }
-                    }).catch(() => {});
-                });
-            });
+        // 首选：Google翻译（最快，国内可访问translate.googleapis.com）
+        async function googleTranslate(text, source, target) {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            // Google返回格式: [[["翻译文本","原文",...],...],...]
+            if (data && data[0]) {
+                let result = '';
+                for (const part of data[0]) {
+                    if (part[0]) result += part[0];
+                }
+                if (result) return result;
+            }
+            throw new Error('Google translate failed');
         }
 
-        // API 1: MyMemory
-        async function translateMyMemory(text, langpair) {
+        // 备选：MyMemory
+        async function myMemoryTranslate(text, langpair) {
             const resp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`);
             const data = await resp.json();
             if (data.responseStatus === 200 && data.responseData) {
                 return data.responseData.translatedText;
             }
             throw new Error('MyMemory failed');
-        }
-
-        // API 2: LibreTranslate
-        async function translateLibre(text, source, target) {
-            const resp = await fetch('https://libretranslate.de/translate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ q: text, source, target, format: 'text' })
-            });
-            const data = await resp.json();
-            if (data.translatedText) return data.translatedText;
-            throw new Error('LibreTranslate failed');
         }
 
         // ==================== UI更新 ====================
