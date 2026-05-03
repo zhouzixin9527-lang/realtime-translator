@@ -19,10 +19,11 @@
         /* 顶部 */
         .header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 8px; }
         .header h1 { font-size: 1rem; color: #7c8fff; }
-        .auto-speak-toggle {
-            display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666;
+        .header-controls { display: flex; align-items: center; gap: 12px; }
+        .tts-toggle, .auto-speak-toggle {
+            display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: #666;
         }
-        .auto-speak-toggle input { accent-color: #7c8fff; }
+        .tts-toggle input, .auto-speak-toggle input { accent-color: #7c8fff; width: 14px; height: 14px; }
 
         /* 语言切换 */
         .lang-bar {
@@ -55,6 +56,7 @@
         }
         .action-btn:active { background: rgba(255,255,255,0.15); color: #fff; }
         .action-btn.speaking { color: #7c8fff; background: rgba(124,143,255,0.2); animation: pulse2 1s infinite; }
+        .action-btn.loading { color: #ffa500; animation: pulse2 0.5s infinite; }
         @keyframes pulse2 { 0%,100%{opacity:1} 50%{opacity:0.6} }
         .panel-content {
             flex: 1; font-size: 1.2rem; line-height: 1.5; overflow-y: auto;
@@ -113,7 +115,7 @@
         .history-empty { text-align:center;color:#333;padding:30px 0; }
         .clear-history { background:rgba(255,77,77,0.1);border:none;color:#ff4d4d;padding:8px;border-radius:8px;width:100%;margin-top:12px;cursor:pointer;font-size:0.8rem; }
 
-        .toast { position:fixed;bottom:140px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(124,143,255,0.9);color:#fff;padding:8px 18px;border-radius:18px;font-size:0.8rem;opacity:0;transition:all .3s;z-index:2000; }
+        .toast { position:fixed;bottom:140px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(124,143,255,0.9);color:#fff;padding:8px 18px;border-radius:18px;font-size:0.8rem;opacity:0;transition:all .3s;z-index:2000;white-space:nowrap; }
         .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
         .error-banner { background:rgba(255,77,77,0.15);border:1px solid rgba(255,77,77,0.3);color:#ff5757;padding:8px;border-radius:8px;text-align:center;font-size:0.75rem;margin-bottom:8px;display:none; }
         .error-banner.show { display:block; }
@@ -124,9 +126,14 @@
         <div class="error-banner" id="errorBanner"></div>
         <div class="header">
             <h1>🎙️ 翻译助手</h1>
-            <label class="auto-speak-toggle">
-                <input type="checkbox" id="autoSpeak" checked> 自动朗读
-            </label>
+            <div class="header-controls">
+                <label class="tts-toggle">
+                    <input type="checkbox" id="useGoogleTTS" checked> Google音色
+                </label>
+                <label class="auto-speak-toggle">
+                    <input type="checkbox" id="autoSpeak" checked> 自动朗读
+                </label>
+            </div>
         </div>
         <div class="lang-bar">
             <span class="lang-label active" id="srcLabel">🇨🇳 中文</span>
@@ -185,21 +192,25 @@
         let S = {
             mode: 'zh2en', recording: false, recognition: null,
             sourceText: '', targetText: '',
-            lastInterim: '', interimTimer: null, ttsQueue: [], isSpeaking: false,
-            history: JSON.parse(localStorage.getItem('transHist3') || '[]')
+            lastInterim: '', interimTimer: null,
+            history: JSON.parse(localStorage.getItem('transHist4') || '[]'),
+            pendingTrans: null, // AbortController for canceling stale requests
+            audioQueue: [], isPlaying: false, currentAudio: null,
+            cachedVoices: []
         };
 
         const cfg = () => LANG[S.mode];
         const $ = id => document.getElementById(id);
         const el = {
-            micBtn:$('micButton'), micHint:$('micHint'), micStatus:$('micStatus'),
+            micBtn:$('micButton'), micHint:$('micHint'),
             srcText:$('sourceText'), tgtText:$('targetText'),
             speakSrc:$('speakSource'), speakTgt:$('speakTarget'),
             copySrc:$('copySource'), copyTgt:$('copyTarget'),
             srcFlag:$('srcFlag'), tgtFlag:$('tgtFlag'), srcName:$('srcLangName'), tgtName:$('tgtLangName'),
             srcLabel:$('srcLabel'), tgtLabel:$('tgtLabel'),
             swapBtn:$('swapBtn'), textInput:$('textInput'), sendBtn:$('sendBtn'),
-            autoSpeak:$('autoSpeak'), histToggle:$('historyToggle'),
+            autoSpeak:$('autoSpeak'), useGoogleTTS:$('useGoogleTTS'),
+            histToggle:$('historyToggle'),
             histPanel:$('historyPanel'), histOverlay:$('historyOverlay'),
             closeHist:$('closeHistory'), histList:$('historyList'), clearHist:$('clearHistory'),
             error:$('errorBanner'), toast:$('toast')
@@ -207,17 +218,18 @@
 
         function init() {
             initSR();
+            loadVoices();
             el.micBtn.onclick = toggleRec;
             el.swapBtn.onclick = swapLang;
             el.sendBtn.onclick = sendText;
             el.textInput.onkeydown = e => { if(e.key==='Enter') sendText(); };
-            el.speakSrc.onclick = () => speak(S.sourceText, cfg().srcCode);
-            el.speakTgt.onclick = () => speak(S.targetText, cfg().tgtCode);
+            el.speakSrc.onclick = () => speakText(S.sourceText, cfg().srcCode);
+            el.speakTgt.onclick = () => speakText(S.targetText, cfg().tgtCode);
             el.copySrc.onclick = () => copy(S.sourceText);
             el.copyTgt.onclick = () => copy(S.targetText);
             el.histToggle.onclick = () => { el.histPanel.classList.toggle('open'); el.histOverlay.classList.toggle('open'); };
             el.histOverlay.onclick = el.closeHist.onclick = () => { el.histPanel.classList.remove('open'); el.histOverlay.classList.remove('open'); };
-            el.clearHist.onclick = () => { if(confirm('清空？')){ S.history=[]; localStorage.removeItem('transHist3'); renderHist(); } };
+            el.clearHist.onclick = () => { if(confirm('清空？')){ S.history=[]; localStorage.removeItem('transHist4'); renderHist(); } };
             updateLangUI(); renderHist();
         }
 
@@ -225,7 +237,8 @@
             const c = cfg();
             el.srcFlag.textContent = c.srcF; el.tgtFlag.textContent = c.tgtF;
             el.srcName.textContent = c.srcN; el.tgtName.textContent = c.tgtN;
-            el.srcLabel.textContent = c.srcF+' '+c.srcN; el.tgtLabel.textContent = c.tgtF+' '+c.tgtN;
+            el.srcLabel.textContent = c.srcF+' '+c.srcN; el.tgtLabel.textContent = c.srcF+' '+c.tgtN;
+            el.tgtLabel.textContent = c.tgtF+' '+c.tgtN;
             el.textInput.placeholder = `输入${c.srcN}翻译...`;
             el.micHint.textContent = `点击开始${c.srcN}语音翻译`;
         }
@@ -278,17 +291,19 @@
             el.micHint.textContent = `点击开始${cfg().srcN}语音翻译`;
         }
 
-        // ===== 实时翻译 =====
+        // ===== 实时翻译（优化速度） =====
         function realtimeTranslate(text, isFinal) {
             if (!text) return;
             if (isFinal) {
                 clearTimeout(S.interimTimer);
+                S.lastInterim = '';
                 doTranslate(text, true);
             } else {
                 if (text === S.lastInterim) return;
                 S.lastInterim = text;
                 clearTimeout(S.interimTimer);
-                S.interimTimer = setTimeout(() => doTranslate(text, false), 250);
+                // 100ms节流，更快响应
+                S.interimTimer = setTimeout(() => doTranslate(text, false), 100);
             }
         }
 
@@ -301,28 +316,37 @@
                     S.targetText += r + ' ';
                     el.tgtText.innerHTML = esc(S.targetText);
                     saveHist(text, r);
-                    if (el.autoSpeak.checked) speak(r, c.tgtCode);
+                    if (el.autoSpeak.checked) speakText(r, c.tgtCode);
                 } catch(e) {
                     try {
                         const r = await mmTrans(text, c.lp);
                         S.targetText += r + ' ';
                         el.tgtText.innerHTML = esc(S.targetText);
                         saveHist(text, r);
-                        if (el.autoSpeak.checked) speak(r, c.tgtCode);
+                        if (el.autoSpeak.checked) speakText(r, c.tgtCode);
                     } catch(e2) { console.error(e2); }
                 }
             } else {
                 el.srcText.innerHTML = esc(S.sourceText) + `<span class="interim">${esc(text)}</span>`;
+                // 取消之前的interim请求
+                if (S.pendingTrans) { S.pendingTrans.abort(); }
+                const controller = new AbortController();
+                S.pendingTrans = controller;
                 try {
-                    const r = await gTrans(text, c.srcCode, c.tgtCode);
+                    const r = await gTrans(text, c.srcCode, c.tgtCode, controller.signal);
                     el.tgtText.innerHTML = esc(S.targetText) + `<span class="interim">${esc(r)}</span>`;
-                } catch(e) {}
+                } catch(e) {
+                    if (e.name !== 'AbortError') {
+                        // 静默失败，interim翻译不需要报错
+                    }
+                }
             }
         }
 
         // ===== 翻译API =====
-        async function gTrans(text, sl, tl) {
-            const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`);
+        async function gTrans(text, sl, tl, signal) {
+            const opts = signal ? { signal } : {};
+            const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`, opts);
             const d = await r.json();
             if (d && d[0]) { let s=''; for(const p of d[0]) if(p[0]) s+=p[0]; if(s) return s; }
             throw new Error('gTrans fail');
@@ -334,28 +358,128 @@
             throw new Error('mmTrans fail');
         }
 
-        // ===== TTS语音合成 =====
-        function speak(text, lang) {
+        // ===== TTS语音合成（双引擎） =====
+        // 引擎1: Google Translate TTS - 音色自然，接近豆包
+        // 引擎2: 浏览器原生SpeechSynthesis - 备选
+
+        function loadVoices() {
+            const load = () => { S.cachedVoices = speechSynthesis.getVoices(); };
+            load();
+            speechSynthesis.onvoiceschanged = load;
+        }
+
+        function getBestVoice(lang) {
+            const voices = S.cachedVoices.length ? S.cachedVoices : speechSynthesis.getVoices();
+            const langPrefix = lang === 'zh' ? 'zh' : 'en';
+            // 优先选Google网络voice，音色最好
+            const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith(langPrefix));
+            if (googleVoice) return googleVoice;
+            // 其次选任何网络voice
+            const networkVoice = voices.find(v => !v.localService && v.lang.startsWith(langPrefix));
+            if (networkVoice) return networkVoice;
+            // 最后选本地voice
+            return voices.find(v => v.lang.startsWith(langPrefix));
+        }
+
+        // Google Translate TTS（主引擎）
+        function googleTTSSpeak(text, lang, btn) {
+            if (!text || !text.trim()) return;
+            const langCode = lang === 'zh' ? 'zh-CN' : 'en';
+            // Google TTS单次最多200字符，分段处理
+            const chunks = splitText(text.trim(), 180);
+            stopAudio();
+            S.audioQueue = chunks;
+            S.isPlaying = true;
+            if (btn) btn.classList.add('speaking');
+            playNextAudio(btn, langCode);
+        }
+
+        function splitText(text, maxLen) {
+            if (text.length <= maxLen) return [text];
+            const chunks = [];
+            // 优先在句号、逗号处分割
+            let remaining = text;
+            while (remaining.length > 0) {
+                if (remaining.length <= maxLen) { chunks.push(remaining); break; }
+                let cutAt = -1;
+                // 找最后一个合适的分割点
+                for (const sep of ['。','，','！','？','.',',','!','?','；',';',' ']) {
+                    const idx = remaining.lastIndexOf(sep, maxLen);
+                    if (idx > cutAt) cutAt = idx;
+                }
+                if (cutAt <= 0) cutAt = maxLen;
+                chunks.push(remaining.substring(0, cutAt + 1).trim());
+                remaining = remaining.substring(cutAt + 1).trim();
+            }
+            return chunks.filter(c => c.length > 0);
+        }
+
+        function playNextAudio(btn, langCode) {
+            if (S.audioQueue.length === 0) {
+                S.isPlaying = false;
+                if (btn) btn.classList.remove('speaking');
+                return;
+            }
+            const chunk = S.audioQueue.shift();
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+            const audio = new Audio(url);
+            S.currentAudio = audio;
+            audio.onended = () => playNextAudio(btn, langCode);
+            audio.onerror = () => {
+                // Google TTS失败，回退到原生
+                console.log('Google TTS failed, falling back to native');
+                S.audioQueue = [];
+                S.isPlaying = false;
+                nativeSpeak(chunk, langCode === 'zh-CN' ? 'zh' : 'en', btn);
+            };
+            audio.play().catch(() => {
+                S.audioQueue = [];
+                S.isPlaying = false;
+                nativeSpeak(chunk, langCode === 'zh-CN' ? 'zh' : 'en', btn);
+            });
+        }
+
+        function stopAudio() {
+            if (S.currentAudio) {
+                S.currentAudio.pause();
+                S.currentAudio = null;
+            }
+            S.audioQueue = [];
+            S.isPlaying = false;
+            speechSynthesis.cancel();
+        }
+
+        // 浏览器原生TTS（备选引擎）
+        function nativeSpeak(text, lang, btn) {
             if (!text || !text.trim()) return;
             speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text.trim());
             u.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
-            u.rate = 1.0;
+            u.rate = 1.05;
             u.pitch = 1.0;
-            // 尝试选一个好的声音
-            const voices = speechSynthesis.getVoices();
-            const match = voices.find(v => v.lang.startsWith(u.lang));
-            if (match) u.voice = match;
-            // 朗读时高亮按钮
-            const btn = lang === cfg().tgtCode.replace('-CN','').replace('-US','') ? el.speakTgt : el.speakSrc;
-            btn.classList.add('speaking');
-            u.onend = () => btn.classList.remove('speaking');
-            u.onerror = () => btn.classList.remove('speaking');
+            const voice = getBestVoice(lang);
+            if (voice) u.voice = voice;
+            if (btn) btn.classList.add('speaking');
+            u.onend = () => { if (btn) btn.classList.remove('speaking'); };
+            u.onerror = () => { if (btn) btn.classList.remove('speaking'); };
             speechSynthesis.speak(u);
         }
 
-        // 预加载声音列表
-        speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        // 统一TTS入口
+        function speakText(text, lang) {
+            if (!text || !text.trim()) return;
+            const btn = lang === cfg().tgtCode ? el.speakTgt : el.speakSrc;
+            // 先停止之前的
+            stopAudio();
+            el.speakSrc.classList.remove('speaking');
+            el.speakTgt.classList.remove('speaking');
+
+            if (el.useGoogleTTS.checked) {
+                googleTTSSpeak(text, lang, btn);
+            } else {
+                nativeSpeak(text, lang, btn);
+            }
+        }
 
         // ===== 交互 =====
         function swapLang() {
@@ -385,7 +509,7 @@
             const c = cfg();
             S.history.unshift({ src, tgt, mode: c.srcN+'→'+c.tgtN, time: new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}), tgtLang: c.tgtCode });
             if (S.history.length > 80) S.history = S.history.slice(0, 80);
-            localStorage.setItem('transHist3', JSON.stringify(S.history));
+            localStorage.setItem('transHist4', JSON.stringify(S.history));
             renderHist();
         }
         function renderHist() {
@@ -396,7 +520,7 @@
                     <div class="history-target">${esc(i.tgt)}</div>
                     <div class="history-meta">
                         <span>${i.mode} · ${i.time}</span>
-                        <button class="history-speak-btn" onclick="speak('${esc(i.tgt).replace(/'/g,"\\'")}','${i.tgtLang}')">🔊 朗读</button>
+                        <button class="history-speak-btn" onclick="speakText('${esc(i.tgt).replace(/'/g,"\\'")}','${i.tgtLang}')">🔊 朗读</button>
                     </div>
                 </div>
             `).join('');
